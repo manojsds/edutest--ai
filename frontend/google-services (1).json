@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "876308739761",
+    "project_id": "safety-4035a",
+    "storage_bucket": "safety-4035a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:876308739761:android:1487ae1edc070248d89490",
+        "android_client_info": {
+          "package_name": "me.bridgefy.example.android.alerts"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCj6v7L47DmbknGIpRc8-3EqG478Wk12Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

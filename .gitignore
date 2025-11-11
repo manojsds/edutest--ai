@@ -1,0 +1,12 @@
+# Node modules and build
+node_modules/
+/.next
+
+# Backend credentials (do not commit service account JSON)
+/backend/edutest-477409-36c78304375d.json
+/backend/credentials/
+backend/credentials/*.json
+
+# env files
+/backend/.env
+/frontend/.env
