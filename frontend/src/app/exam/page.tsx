@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import { useExamStore } from '@/lib/examStore';
 import { Button } from '@/components/ui/button';
