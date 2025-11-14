@@ -12,7 +12,8 @@ import { DoubtBox } from '@/components/DoubtBox'
 import { Results } from '@/components/Results'
 
 const API_CANDIDATES = [
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001',
+  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com',
+  'http://localhost:5001',
   'http://localhost:5000'
 ]
 
