@@ -121,10 +121,13 @@ export default function TestPage() {
         topic = input.charAt(0).toUpperCase() + input.slice(1)
       }
 
+      const useRecent = typeof topic === 'string' && topic.toLowerCase().includes('current')
+
       const body = {
         subject: subject,
         topic: topic,
-        count: questionCount // use selected question count
+        count: questionCount, // use selected question count
+        useRecent: useRecent
       }
 
       const base = apiBase || API_CANDIDATES[0]
