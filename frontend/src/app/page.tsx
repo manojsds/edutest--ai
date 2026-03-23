@@ -26,6 +26,11 @@ interface Question {
   correctAnswer: number
 }
 
+interface InstituteBranding {
+  name?: string
+  logoUrl?: string | null
+}
+
 interface ExamProfile {
   pattern: string
   difficulty: string
@@ -317,6 +322,7 @@ export default function TestPage() {
   const [showExplanation, setShowExplanation] = useState<number | null>(null)
   const [questionCount, setQuestionCount] = useState<number>(50)
   const [followUps, setFollowUps] = useState<{[key:number]: string}>({})
+  const [brand, setBrand] = useState<InstituteBranding | null>(null)
   
   const examTypes = [
     'UPSC',
@@ -371,6 +377,33 @@ export default function TestPage() {
   useEffect(() => {
     // intentionally empty; fetch triggered by setup submit
   }, [])
+
+  useEffect(() => {
+    const ref = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('ref')
+      : null
+
+    if (!ref) return
+
+    const loadBranding = async () => {
+      const base = apiBase || API_CANDIDATES[0]
+      try {
+        const response = await fetch(`${base}/api/auth/institute/${encodeURIComponent(ref)}`)
+        if (!response.ok) return
+        const data = await response.json()
+        if (data?.institute) {
+          setBrand({
+            name: data.institute.name,
+            logoUrl: data.institute.logoUrl || null,
+          })
+        }
+      } catch (e) {
+        // ignore branding load failures
+      }
+    }
+
+    loadBranding()
+  }, [apiBase])
 
   useEffect(() => {
     if (questions.length > 0) {
@@ -754,7 +787,14 @@ export default function TestPage() {
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Card className="p-6">
             <CardHeader>
-              <CardTitle className="text-2xl text-center">EduTest AI - Your Personal Test Generator</CardTitle>
+              <CardTitle className="text-2xl text-center">
+                {brand?.name || 'EduTest AI'} - Your Personal Test Generator
+              </CardTitle>
+              {brand?.logoUrl && (
+                <div className="flex justify-center mt-3">
+                  <img src={brand.logoUrl} alt={brand?.name || 'Brand logo'} className="h-12 object-contain" />
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
