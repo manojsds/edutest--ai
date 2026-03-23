@@ -457,6 +457,24 @@ router.get('/institute/:referralCode', async (req, res) => {
  */
 router.put('/institute/:referralCode/branding', async (req, res) => {
   try {
+    const brandingAdminKey = process.env.BRANDING_ADMIN_KEY;
+    if (!brandingAdminKey && process.env.NODE_ENV === 'production') {
+      return res.status(500).json({
+        error: 'Branding endpoint is not configured',
+        message: 'Missing BRANDING_ADMIN_KEY in environment'
+      });
+    }
+
+    if (brandingAdminKey) {
+      const providedKey = req.headers['x-branding-key'];
+      if (providedKey !== brandingAdminKey) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Invalid branding key'
+        });
+      }
+    }
+
     const { referralCode } = req.params;
     const { name, logoUrl } = req.body;
 

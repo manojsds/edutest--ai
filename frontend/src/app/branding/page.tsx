@@ -9,6 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function BrandingSetupPage() {
   const [referralCode, setReferralCode] = useState('');
+  const [brandingKey, setBrandingKey] = useState('');
   const [brandName, setBrandName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,9 +18,13 @@ export default function BrandingSetupPage() {
 
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get('ref');
+    const key = new URLSearchParams(window.location.search).get('key');
     if (ref) {
       setReferralCode(ref);
       loadInstitute(ref);
+    }
+    if (key) {
+      setBrandingKey(key);
     }
   }, []);
 
@@ -55,7 +60,10 @@ export default function BrandingSetupPage() {
     try {
       const response = await fetch(`${API_URL}/api/auth/institute/${encodeURIComponent(referralCode.trim())}/branding`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-branding-key': brandingKey,
+        },
         body: JSON.stringify({
           name: brandName,
           logoUrl,
@@ -96,6 +104,17 @@ export default function BrandingSetupPage() {
                 value={referralCode}
                 onChange={(e) => setReferralCode(e.target.value)}
                 placeholder="e.g. ALLEN001"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Branding Admin Key</Label>
+              <input
+                className="w-full border rounded-md p-2"
+                value={brandingKey}
+                onChange={(e) => setBrandingKey(e.target.value)}
+                placeholder="Enter branding admin key"
+                type="password"
               />
             </div>
 
