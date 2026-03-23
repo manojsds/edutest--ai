@@ -12,7 +12,9 @@ import { DoubtBox } from '@/components/DoubtBox'
 import { Results } from '@/components/Results'
 
 const API_CANDIDATES = [
-  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com',
+  // Production: Use your deployed Render backend
+  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-backend.onrender.com',
+  // Fallback: Try local development servers
   'http://localhost:5001',
   'http://localhost:5000'
 ]
@@ -22,6 +24,202 @@ interface Question {
   question: string
   options: string[]
   correctAnswer: number
+}
+
+interface ExamProfile {
+  pattern: string
+  difficulty: string
+  focusAreas: string[]
+}
+
+interface DifficultyDistribution {
+  easy: number
+  medium: number
+  hard: number
+}
+
+interface MarkingScheme {
+  correct: number
+  wrong: number
+  unattempted: number
+}
+
+interface ExamBlueprint {
+  sectionWeightage: Record<string, number>
+  difficultyDistribution: DifficultyDistribution
+  markingScheme: MarkingScheme
+}
+
+interface ExamTimerRule {
+  secondsPerQuestion: number
+  minimumSeconds: number
+}
+
+const EXAM_PROFILES: Record<string, ExamProfile> = {
+  'UPSC': {
+    pattern: 'UPSC CSE Prelims MCQ',
+    difficulty: 'Medium to High',
+    focusAreas: ['Current Affairs', 'Polity', 'History', 'Geography', 'Economy', 'Environment']
+  },
+  'SSC CGL': {
+    pattern: 'Tier-style objective MCQ',
+    difficulty: 'Easy to Medium',
+    focusAreas: ['Quantitative Aptitude', 'Reasoning', 'English', 'General Awareness']
+  },
+  'NEET UG': {
+    pattern: 'Single correct objective MCQ',
+    difficulty: 'Medium to High',
+    focusAreas: ['Physics', 'Chemistry', 'Biology (Botany and Zoology)']
+  },
+  'JEE Main': {
+    pattern: 'Single correct objective MCQ',
+    difficulty: 'Medium to High',
+    focusAreas: ['Physics', 'Chemistry', 'Mathematics']
+  },
+  'JEE Advanced': {
+    pattern: 'Advanced conceptual objective MCQ',
+    difficulty: 'High',
+    focusAreas: ['Advanced Physics', 'Advanced Chemistry', 'Advanced Mathematics']
+  },
+  'CAT': {
+    pattern: 'Aptitude and verbal objective',
+    difficulty: 'Medium to High',
+    focusAreas: ['VARC', 'DILR', 'QA']
+  },
+  'GATE': {
+    pattern: 'Technical objective MCQ',
+    difficulty: 'Medium to High',
+    focusAreas: ['Core Engineering', 'Aptitude', 'Mathematics']
+  },
+  'RRB NTPC': {
+    pattern: 'Objective MCQ',
+    difficulty: 'Easy to Medium',
+    focusAreas: ['General Awareness', 'Mathematics', 'Reasoning']
+  },
+  'Bank PO': {
+    pattern: 'Banking aptitude objective',
+    difficulty: 'Medium',
+    focusAreas: ['Quant', 'Reasoning', 'English', 'Banking Awareness']
+  },
+  'NET': {
+    pattern: 'UGC NET style objective',
+    difficulty: 'Medium to High',
+    focusAreas: ['Teaching Aptitude', 'Research Aptitude', 'Subject Domain']
+  }
+}
+
+const EXAM_BLUEPRINTS: Record<string, ExamBlueprint> = {
+  'UPSC': {
+    sectionWeightage: {
+      'Polity and Governance': 22,
+      'History and Culture': 18,
+      'Geography': 16,
+      'Economy': 16,
+      'Environment and Ecology': 14,
+      'Current Affairs': 14
+    },
+    difficultyDistribution: { easy: 20, medium: 55, hard: 25 },
+    markingScheme: { correct: 2, wrong: -0.67, unattempted: 0 }
+  },
+  'NEET UG': {
+    sectionWeightage: {
+      'Biology': 50,
+      'Chemistry': 25,
+      'Physics': 25
+    },
+    difficultyDistribution: { easy: 25, medium: 50, hard: 25 },
+    markingScheme: { correct: 4, wrong: -1, unattempted: 0 }
+  },
+  'JEE Main': {
+    sectionWeightage: {
+      'Physics': 34,
+      'Chemistry': 33,
+      'Mathematics': 33
+    },
+    difficultyDistribution: { easy: 20, medium: 55, hard: 25 },
+    markingScheme: { correct: 4, wrong: -1, unattempted: 0 }
+  },
+  'JEE Advanced': {
+    sectionWeightage: {
+      'Physics': 34,
+      'Chemistry': 33,
+      'Mathematics': 33
+    },
+    difficultyDistribution: { easy: 10, medium: 45, hard: 45 },
+    markingScheme: { correct: 3, wrong: -1, unattempted: 0 }
+  },
+  'SSC CGL': {
+    sectionWeightage: {
+      'Quantitative Aptitude': 25,
+      'General Intelligence and Reasoning': 25,
+      'General Awareness': 25,
+      'English Comprehension': 25
+    },
+    difficultyDistribution: { easy: 35, medium: 50, hard: 15 },
+    markingScheme: { correct: 2, wrong: -0.5, unattempted: 0 }
+  },
+  'Bank PO': {
+    sectionWeightage: {
+      'Quantitative Aptitude': 33,
+      'Reasoning': 33,
+      'English Language': 34
+    },
+    difficultyDistribution: { easy: 30, medium: 50, hard: 20 },
+    markingScheme: { correct: 1, wrong: -0.25, unattempted: 0 }
+  },
+  'RRB NTPC': {
+    sectionWeightage: {
+      'General Awareness': 40,
+      'Mathematics': 30,
+      'General Intelligence and Reasoning': 30
+    },
+    difficultyDistribution: { easy: 40, medium: 45, hard: 15 },
+    markingScheme: { correct: 1, wrong: -0.33, unattempted: 0 }
+  },
+  'CAT': {
+    sectionWeightage: {
+      'VARC': 34,
+      'DILR': 33,
+      'QA': 33
+    },
+    difficultyDistribution: { easy: 20, medium: 50, hard: 30 },
+    markingScheme: { correct: 3, wrong: -1, unattempted: 0 }
+  },
+  'GATE': {
+    sectionWeightage: {
+      'General Aptitude': 15,
+      'Engineering Mathematics': 13,
+      'Core Subject': 72
+    },
+    difficultyDistribution: { easy: 20, medium: 55, hard: 25 },
+    markingScheme: { correct: 1, wrong: -0.33, unattempted: 0 }
+  }
+}
+
+const DEFAULT_EXAM_BLUEPRINT: ExamBlueprint = {
+  sectionWeightage: {
+    'Core Topic': 70,
+    'Application and Analysis': 30
+  },
+  difficultyDistribution: { easy: 25, medium: 50, hard: 25 },
+  markingScheme: { correct: 1, wrong: 0, unattempted: 0 }
+}
+
+const EXAM_TIMER_RULES: Record<string, ExamTimerRule> = {
+  'UPSC': { secondsPerQuestion: 72, minimumSeconds: 30 * 60 },
+  'NEET UG': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 },
+  'JEE Main': { secondsPerQuestion: 75, minimumSeconds: 30 * 60 },
+  'JEE Advanced': { secondsPerQuestion: 90, minimumSeconds: 45 * 60 },
+  'SSC CGL': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 },
+  'Bank PO': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 },
+  'RRB NTPC': { secondsPerQuestion: 54, minimumSeconds: 30 * 60 },
+  'CAT': { secondsPerQuestion: 120, minimumSeconds: 40 * 60 },
+  'GATE': { secondsPerQuestion: 108, minimumSeconds: 45 * 60 }
+}
+
+const getExamDurationSeconds = (exam: string, count: number) => {
+  const rule = EXAM_TIMER_RULES[exam] || { secondsPerQuestion: 36, minimumSeconds: 30 * 60 }
+  return Math.max(rule.minimumSeconds, count * rule.secondsPerQuestion)
 }
 
 export default function TestPage() {
@@ -47,9 +245,20 @@ export default function TestPage() {
     'KPSC',
     'SSC CGL',
     'Bank PO',
-    'RRB',
+    'RRB NTPC',
     'GATE',
-    'NET'
+    'NET',
+    'NEET UG',
+    'JEE Main',
+    'JEE Advanced',
+    'CUET UG',
+    'NDA',
+    'CDS',
+    'CAT',
+    'XAT',
+    'CLAT',
+    'AFCAT',
+    'State PSC'
   ]
 
   // Resolve backend base (probe 5001 then 5000)
@@ -123,11 +332,23 @@ export default function TestPage() {
 
       const useRecent = typeof topic === 'string' && topic.toLowerCase().includes('current')
 
+      const examProfile = EXAM_PROFILES[selectedExam] || {
+        pattern: 'Objective MCQ',
+        difficulty: 'Medium',
+        focusAreas: [topic]
+      }
+
+      const examBlueprint = EXAM_BLUEPRINTS[selectedExam] || DEFAULT_EXAM_BLUEPRINT
+
       const body = {
         subject: subject,
         topic: topic,
         count: questionCount, // use selected question count
-        useRecent: useRecent
+        useRecent: useRecent,
+        examPattern: examProfile.pattern,
+        examDifficulty: examProfile.difficulty,
+        examFocusAreas: examProfile.focusAreas,
+        examBlueprint
       }
 
       const base = apiBase || API_CANDIDATES[0]
@@ -221,12 +442,66 @@ export default function TestPage() {
     setShowResults(true)
   }
 
-  const calculateScore = () => {
+  const calculateResultStats = () => {
+    const blueprint = EXAM_BLUEPRINTS[selectedExam] || DEFAULT_EXAM_BLUEPRINT
+    const marking = blueprint.markingScheme
+
     let correct = 0
+    let wrong = 0
+    let unattempted = 0
+
     answers.forEach((answer, index) => {
-      if (answer === questions[index].correctAnswer) correct++
+      if (answer === null || answer === undefined) {
+        unattempted++
+      } else if (answer === questions[index].correctAnswer) {
+        correct++
+      } else {
+        wrong++
+      }
     })
-    return correct
+
+    const score = (correct * marking.correct) + (wrong * marking.wrong) + (unattempted * marking.unattempted)
+    const attempted = correct + wrong
+    const accuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : 0
+
+    return {
+      score,
+      correct,
+      wrong,
+      unattempted,
+      attempted,
+      accuracy,
+      marking
+    }
+  }
+
+  const calculateLivePreviewStats = () => {
+    const blueprint = EXAM_BLUEPRINTS[selectedExam] || DEFAULT_EXAM_BLUEPRINT
+    const marking = blueprint.markingScheme
+
+    let correct = 0
+    let wrong = 0
+    let unattempted = 0
+
+    answers.forEach((answer, index) => {
+      if (answer === null || answer === undefined) {
+        unattempted++
+      } else if (answer === questions[index]?.correctAnswer) {
+        correct++
+      } else {
+        wrong++
+      }
+    })
+
+    const score = (correct * marking.correct) + (wrong * marking.wrong) + (unattempted * marking.unattempted)
+    return {
+      score,
+      correct,
+      wrong,
+      unattempted,
+      attempted: correct + wrong,
+      marking
+    }
   }
 
   if (loading) {
@@ -283,7 +558,7 @@ export default function TestPage() {
   }
 
   if (showResults) {
-    const score = calculateScore()
+    const stats = calculateResultStats()
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-2xl">
@@ -292,9 +567,12 @@ export default function TestPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="text-center">
-              <div className="text-6xl font-bold text-blue-600">{score}/{questions.length}</div>
+              <div className="text-6xl font-bold text-blue-600">{stats.score.toFixed(2)}</div>
               <p className="text-lg text-gray-600 mt-2">
-                You scored {Math.round((score / questions.length) * 100)}%
+                Correct: {stats.correct} | Wrong: {stats.wrong} | Unattempted: {stats.unattempted}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Accuracy: {stats.accuracy}% | Marking: +{stats.marking.correct} / {stats.marking.wrong}
               </p>
             </div>
             <div className="space-y-4">
@@ -382,6 +660,9 @@ export default function TestPage() {
       </div>
     )
   }
+
+  const liveStats = calculateLivePreviewStats()
+
   // Main UI flow: Input -> Review -> Test -> Results
   return (
     <div className="min-h-screen bg-gray-50">
@@ -454,8 +735,8 @@ export default function TestPage() {
             <div className="mt-4 flex items-center gap-4">
               <Button onClick={() => setStep('input')} variant="outline">Back</Button>
               <Button onClick={() => {
-                // Set timer based on question count: 50 -> 30min, 100 -> 60min
-                const secs = questionCount <= 50 ? 30 * 60 : 60 * 60
+                // Use exam-aware timer defaults with fallback
+                const secs = getExamDurationSeconds(selectedExam, questionCount)
                 setTimeLeft(secs)
                 setCurrentQuestion(0)
                 setStep('test')
@@ -531,6 +812,18 @@ export default function TestPage() {
 
             <aside>
               <DoubtBox />
+              <div className="mt-4 rounded-lg border p-4 bg-white">
+                <h3 className="font-semibold text-sm mb-2">Live Score Preview</h3>
+                <div className="text-sm text-gray-700 space-y-1">
+                  <p>Score: {liveStats.score.toFixed(2)}</p>
+                  <p>Correct: {liveStats.correct}</p>
+                  <p>Wrong: {liveStats.wrong}</p>
+                  <p>Unattempted: {liveStats.unattempted}</p>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Marking: +{liveStats.marking.correct} / {liveStats.marking.wrong}
+                </p>
+              </div>
               <div className="mt-4">
                 <Button variant="outline" onClick={() => { setStep('review') }}>Back to Review</Button>
               </div>

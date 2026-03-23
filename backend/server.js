@@ -1,16 +1,32 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
+
+// Initialize Firebase (must be done before importing models)
+require('./config/firebase');
 
 const app = express();
 const ports = [5000, 5001, 5002, 3000, 3001]; // List of ports to try
 let currentPortIndex = 0;
 
+// Rate limiting for public endpoints
+const publicLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Max 20 requests per IP per 15 minutes
+  message: {
+    error: 'Too many requests',
+    message: 'Please try again later or sign up for unlimited access'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? [/\.vercel\.app$/, process.env.FRONTEND_URL].filter(Boolean)
+    ? [/\.vercel\.app$/, /\.edutest\.ai$/, process.env.FRONTEND_URL].filter(Boolean)
     : ['http://localhost:3000', 'http://localhost:3001']
 }));
 app.use(express.json());
@@ -96,6 +112,7 @@ app.post('/api/rag/search', async (req, res) => {
 });
 
 // Mount routes
+app.use('/api/auth', require('./routes/authRoutes')); // Authentication routes
 app.use('/api', require('./routes/explanations'));
 app.use('/api', require('./routes/payment'));
 // app.use('/api', require('./routes/feedback')); // TODO: Create feedback route
@@ -314,12 +331,167 @@ const fetchContextFromRAG = async (topic, subject) => {
   }
 };
 
+const getExamPromptProfile = (subject, examPattern, examDifficulty, examFocusAreas) => {
+  const subjectKey = String(subject || '').toLowerCase();
+
+  const defaults = {
+    examLabel: subject || 'Indian Competitive Exam',
+    pattern: 'Objective single-correct MCQ',
+    difficulty: 'Medium',
+    languageStyle: 'clear, exam-oriented and precise',
+    focusAreas: [subject || 'General Studies']
+  };
+
+  if (subjectKey.includes('neet')) {
+    defaults.examLabel = 'NEET UG';
+    defaults.pattern = 'Single correct objective MCQ';
+    defaults.difficulty = 'Medium to High';
+    defaults.languageStyle = 'medical entrance, concept + application focused';
+    defaults.focusAreas = ['Physics', 'Chemistry', 'Biology (Botany and Zoology)'];
+  } else if (subjectKey.includes('jee advanced')) {
+    defaults.examLabel = 'JEE Advanced';
+    defaults.pattern = 'Advanced conceptual objective MCQ';
+    defaults.difficulty = 'High';
+    defaults.languageStyle = 'highly conceptual, multi-step reasoning';
+    defaults.focusAreas = ['Advanced Physics', 'Advanced Chemistry', 'Advanced Mathematics'];
+  } else if (subjectKey.includes('jee')) {
+    defaults.examLabel = 'JEE Main';
+    defaults.pattern = 'Single correct objective MCQ';
+    defaults.difficulty = 'Medium to High';
+    defaults.languageStyle = 'engineering entrance, conceptual and calculation-oriented';
+    defaults.focusAreas = ['Physics', 'Chemistry', 'Mathematics'];
+  } else if (subjectKey.includes('upsc')) {
+    defaults.examLabel = 'UPSC CSE Prelims';
+    defaults.pattern = 'Objective MCQ with statement-based mix';
+    defaults.difficulty = 'Medium to High';
+    defaults.languageStyle = 'formal, analytical, policy-aware';
+    defaults.focusAreas = ['Polity', 'History', 'Geography', 'Economy', 'Environment', 'Current Affairs'];
+  } else if (subjectKey.includes('ssc')) {
+    defaults.examLabel = 'SSC CGL';
+    defaults.pattern = 'Tier-style objective MCQ';
+    defaults.difficulty = 'Easy to Medium';
+    defaults.languageStyle = 'direct and speed-test friendly';
+    defaults.focusAreas = ['Quantitative Aptitude', 'Reasoning', 'English', 'General Awareness'];
+  }
+
+  return {
+    examLabel: defaults.examLabel,
+    pattern: examPattern || defaults.pattern,
+    difficulty: examDifficulty || defaults.difficulty,
+    languageStyle: defaults.languageStyle,
+    focusAreas: Array.isArray(examFocusAreas) && examFocusAreas.length > 0 ? examFocusAreas : defaults.focusAreas
+  };
+};
+
+const getDefaultExamBlueprint = () => ({
+  sectionWeightage: {
+    'Core Topic': 70,
+    'Application and Analysis': 30
+  },
+  difficultyDistribution: {
+    easy: 25,
+    medium: 50,
+    hard: 25
+  },
+  markingScheme: {
+    correct: 1,
+    wrong: 0,
+    unattempted: 0
+  }
+});
+
+const normalizeExamBlueprint = (examBlueprint) => {
+  const fallback = getDefaultExamBlueprint();
+  if (!examBlueprint || typeof examBlueprint !== 'object') return fallback;
+
+  const sectionWeightage = (examBlueprint.sectionWeightage && typeof examBlueprint.sectionWeightage === 'object')
+    ? examBlueprint.sectionWeightage
+    : fallback.sectionWeightage;
+
+  const difficultyDistribution = (examBlueprint.difficultyDistribution && typeof examBlueprint.difficultyDistribution === 'object')
+    ? {
+        easy: Number(examBlueprint.difficultyDistribution.easy ?? fallback.difficultyDistribution.easy),
+        medium: Number(examBlueprint.difficultyDistribution.medium ?? fallback.difficultyDistribution.medium),
+        hard: Number(examBlueprint.difficultyDistribution.hard ?? fallback.difficultyDistribution.hard)
+      }
+    : fallback.difficultyDistribution;
+
+  const markingScheme = (examBlueprint.markingScheme && typeof examBlueprint.markingScheme === 'object')
+    ? {
+        correct: Number(examBlueprint.markingScheme.correct ?? fallback.markingScheme.correct),
+        wrong: Number(examBlueprint.markingScheme.wrong ?? fallback.markingScheme.wrong),
+        unattempted: Number(examBlueprint.markingScheme.unattempted ?? fallback.markingScheme.unattempted)
+      }
+    : fallback.markingScheme;
+
+  return {
+    sectionWeightage,
+    difficultyDistribution,
+    markingScheme
+  };
+};
+
+const getSectionQuestionTargets = (sectionWeightage, totalCount) => {
+  const entries = Object.entries(sectionWeightage || {});
+  if (entries.length === 0) return [];
+
+  const targets = entries.map(([section, weight]) => {
+    const exact = (Number(weight) / 100) * totalCount;
+    return {
+      section,
+      weight: Number(weight),
+      count: Math.floor(exact),
+      remainder: exact - Math.floor(exact)
+    };
+  });
+
+  let assigned = targets.reduce((sum, t) => sum + t.count, 0);
+  const remaining = Math.max(0, totalCount - assigned);
+
+  targets
+    .sort((a, b) => b.remainder - a.remainder)
+    .slice(0, remaining)
+    .forEach((t) => {
+      t.count += 1;
+      assigned += 1;
+    });
+
+  return targets
+    .sort((a, b) => b.weight - a.weight)
+    .map((t) => ({ section: t.section, count: t.count }));
+};
+
 // Questions endpoint
 app.post('/api/questions', async (req, res) => {
   try {
-    const { subject = 'UPSC', topic = 'Modern Indian History (1857-1900)', count = 5, useRecent = false } = req.body;
+    const {
+      subject = 'UPSC',
+      topic = 'Modern Indian History (1857-1900)',
+      count = 5,
+      useRecent = false,
+      examPattern,
+      examDifficulty,
+      examFocusAreas,
+      examBlueprint
+    } = req.body;
+
+    const examProfile = getExamPromptProfile(subject, examPattern, examDifficulty, examFocusAreas);
+    const normalizedBlueprint = normalizeExamBlueprint(examBlueprint);
     
-    console.log('Generating questions for:', { subject, topic, count, useRecent });
+    console.log('Generating questions for:', { subject, topic, count, useRecent, examProfile, normalizedBlueprint });
+
+    const sectionGuide = Object.entries(normalizedBlueprint.sectionWeightage)
+      .map(([section, weight]) => `${section}: ${weight}%`)
+      .join(', ');
+
+    const sectionTargets = getSectionQuestionTargets(normalizedBlueprint.sectionWeightage, Number(count));
+    const sectionTargetGuide = sectionTargets
+      .map((s) => `${s.section}: ${s.count}`)
+      .join(', ');
+
+    const difficultyGuide = `Easy ${normalizedBlueprint.difficultyDistribution.easy}%, Medium ${normalizedBlueprint.difficultyDistribution.medium}%, Hard ${normalizedBlueprint.difficultyDistribution.hard}%`;
+
+    const markingGuide = `Correct +${normalizedBlueprint.markingScheme.correct}, Wrong ${normalizedBlueprint.markingScheme.wrong}, Unattempted ${normalizedBlueprint.markingScheme.unattempted}`;
     
     // Fetch context from RAG service if current affairs or recent content requested
     let contextSnippet = '';
@@ -342,80 +514,68 @@ app.post('/api/questions', async (req, res) => {
     // Build improved prompt based on whether we have context
     let prompt;
     if (contextSnippet) {
-      // Prompt with RAG context - UPSC-style questions
-      prompt = `You are creating UPSC Civil Services Examination (Prelims) style questions based on the following CURRENT INFORMATION:
+      // Prompt with RAG context and exam-aware style
+      prompt = `You are creating ${examProfile.examLabel} style questions based on the following CURRENT INFORMATION:
 
 ${contextSnippet}
 
 TASK: Generate exactly ${count} multiple-choice questions for ${subject} ${topic} exam preparation.
 
-CRITICAL INSTRUCTIONS FOR UPSC-STYLE QUESTIONS:
+CRITICAL EXAM INSTRUCTIONS:
 1. Base ALL questions on the current information provided above
-2. Mix question formats (10% statement-based, 90% standard MCQs)
-3. Use UPSC language: formal, precise, analytical
-4. Difficulty: UPSC Prelims level (Medium to High)
+2. Follow pattern: ${examProfile.pattern}
+3. Use language style: ${examProfile.languageStyle}
+4. Difficulty level: ${examProfile.difficulty}
 5. All 4 options must be plausible and closely related
 6. Return ONLY valid JSON, no markdown formatting
+7. Focus strongly on these exam areas: ${examProfile.focusAreas.join(', ')}
+8. Approximate section weightage for this generated set: ${sectionGuide}
+9. Approximate difficulty mix for this generated set: ${difficultyGuide}
+10. Marking scheme context: ${markingGuide}
+11. Target section-wise question counts (sum must be ${count}): ${sectionTargetGuide}
 
-QUESTION FORMATS TO USE:
-
-A. Standard MCQ (80%):
-   - Direct factual questions with clear options
-   - Example: "Which of the following was announced in..."
-
-B. Statement-based Questions (10%):
-   - Format: "Consider the following statements: 1. [statement] 2. [statement]
-     Which of the statements given above is/are correct?"
-   - Options: "1 only", "2 only", "Both 1 and 2", "Neither 1 nor 2"
-
-C. Match/Multiple Statement Questions (10%):
-   - Analytical questions requiring understanding of multiple facts
-   - Example: "With reference to [topic], consider the following..."
+QUESTION FORMAT MIX:
+- 85% standard single-correct MCQs
+- 15% analytical or statement-based (only if it fits the selected exam pattern)
 
 JSON Format (EXACT):
 [
   {
     "id": 1,
-    "question": "Question text in UPSC style based on current information?",
+    "question": "Question text in ${examProfile.examLabel} style based on current information?",
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "correctAnswer": 0,
     "explanation": "Detailed explanation citing the source from current information."
   }
 ]
 
-IMPORTANT: Questions should sound like they're from actual UPSC CSE Prelims paper. Use phrases like:
-- "With reference to..."
-- "Consider the following statements..."
-- "Which of the following is/are correct?"
-- "In the context of..."`;
+IMPORTANT: Questions should sound like actual ${examProfile.examLabel} paper-level questions.`;
     } else {
-      // Prompt without context - UPSC-style from general knowledge
-      prompt = `Generate exactly ${count} UPSC Civil Services Prelims style multiple-choice questions for ${subject} ${topic}.
+      // Prompt without context - exam-aware from general knowledge
+      prompt = `Generate exactly ${count} ${examProfile.examLabel} style multiple-choice questions for ${subject} ${topic}.
 
-UPSC QUESTION GUIDELINES:
-1. Use formal UPSC language and structure
-2. Mix formats: 80% standard MCQ, 10% statement-based, 10% analytical
-3. Difficulty: Medium to Hard (UPSC Prelims standard)
-4. All options must be plausible and closely related
-5. Return ONLY valid JSON array, no markdown
+QUESTION GUIDELINES:
+1. Follow pattern: ${examProfile.pattern}
+2. Difficulty: ${examProfile.difficulty}
+3. Use language style: ${examProfile.languageStyle}
+4. Focus areas: ${examProfile.focusAreas.join(', ')}
+5. All options must be plausible and closely related
+6. Return ONLY valid JSON array, no markdown
+7. Approximate section weightage for this generated set: ${sectionGuide}
+8. Approximate difficulty mix for this generated set: ${difficultyGuide}
+9. Marking scheme context: ${markingGuide}
+10. Target section-wise question counts (sum must be ${count}): ${sectionTargetGuide}
 
 JSON Format:
 [
   {
     "id": 1,
-    "question": "With reference to [topic], which of the following statements is correct?",
+    "question": "Exam-style question for ${examProfile.examLabel} on [topic]?",
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "correctAnswer": 0,
-    "explanation": "Detailed explanation with historical/factual context."
+    "explanation": "Detailed explanation with clear concept and reasoning."
   }
-]
-
-For statement-based questions, use format:
-"Consider the following statements:
-1. [Statement one]
-2. [Statement two]
-Which of the statements given above is/are correct?"
-Options: "1 only", "2 only", "Both 1 and 2", "Neither 1 nor 2"`;
+]`;
     }
 
     if (!process.env.GEMINI_API_KEY) {
