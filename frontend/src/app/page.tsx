@@ -105,6 +105,31 @@ const EXAM_PROFILES: Record<string, ExamProfile> = {
     pattern: 'UGC NET style objective',
     difficulty: 'Medium to High',
     focusAreas: ['Teaching Aptitude', 'Research Aptitude', 'Subject Domain']
+  },
+  'KCET': {
+    pattern: 'Objective single-correct MCQ',
+    difficulty: 'Easy to Medium',
+    focusAreas: ['Physics', 'Chemistry', 'Mathematics', 'Biology']
+  },
+  'DCET': {
+    pattern: 'Diploma CET objective MCQ',
+    difficulty: 'Medium',
+    focusAreas: ['Applied Mathematics', 'Applied Science', 'Core Diploma Branch']
+  },
+  'COMEDK': {
+    pattern: 'Engineering entrance objective MCQ',
+    difficulty: 'Medium',
+    focusAreas: ['Physics', 'Chemistry', 'Mathematics']
+  },
+  'CTET': {
+    pattern: 'Teacher eligibility objective MCQ',
+    difficulty: 'Easy to Medium',
+    focusAreas: ['Child Development and Pedagogy', 'Language I', 'Language II', 'Mathematics', 'Environmental Studies']
+  },
+  'TET': {
+    pattern: 'Teacher eligibility objective MCQ',
+    difficulty: 'Easy to Medium',
+    focusAreas: ['Pedagogy', 'Language', 'Mathematics', 'General Studies']
   }
 }
 
@@ -193,6 +218,54 @@ const EXAM_BLUEPRINTS: Record<string, ExamBlueprint> = {
     },
     difficultyDistribution: { easy: 20, medium: 55, hard: 25 },
     markingScheme: { correct: 1, wrong: -0.33, unattempted: 0 }
+  },
+  'KCET': {
+    sectionWeightage: {
+      'Physics': 25,
+      'Chemistry': 25,
+      'Mathematics/Biology': 50
+    },
+    difficultyDistribution: { easy: 35, medium: 50, hard: 15 },
+    markingScheme: { correct: 1, wrong: 0, unattempted: 0 }
+  },
+  'DCET': {
+    sectionWeightage: {
+      'Applied Mathematics': 30,
+      'Applied Science': 30,
+      'Core Diploma Subject': 40
+    },
+    difficultyDistribution: { easy: 30, medium: 50, hard: 20 },
+    markingScheme: { correct: 1, wrong: 0, unattempted: 0 }
+  },
+  'COMEDK': {
+    sectionWeightage: {
+      'Physics': 33,
+      'Chemistry': 33,
+      'Mathematics': 34
+    },
+    difficultyDistribution: { easy: 30, medium: 50, hard: 20 },
+    markingScheme: { correct: 1, wrong: 0, unattempted: 0 }
+  },
+  'CTET': {
+    sectionWeightage: {
+      'Child Development and Pedagogy': 20,
+      'Language I': 20,
+      'Language II': 20,
+      'Mathematics and Science': 20,
+      'Social Studies/EVS': 20
+    },
+    difficultyDistribution: { easy: 40, medium: 45, hard: 15 },
+    markingScheme: { correct: 1, wrong: 0, unattempted: 0 }
+  },
+  'TET': {
+    sectionWeightage: {
+      'Pedagogy': 25,
+      'Language': 25,
+      'Mathematics': 25,
+      'General Studies': 25
+    },
+    difficultyDistribution: { easy: 40, medium: 45, hard: 15 },
+    markingScheme: { correct: 1, wrong: 0, unattempted: 0 }
   }
 }
 
@@ -214,7 +287,12 @@ const EXAM_TIMER_RULES: Record<string, ExamTimerRule> = {
   'Bank PO': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 },
   'RRB NTPC': { secondsPerQuestion: 54, minimumSeconds: 30 * 60 },
   'CAT': { secondsPerQuestion: 120, minimumSeconds: 40 * 60 },
-  'GATE': { secondsPerQuestion: 108, minimumSeconds: 45 * 60 }
+  'GATE': { secondsPerQuestion: 108, minimumSeconds: 45 * 60 },
+  'KCET': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 },
+  'DCET': { secondsPerQuestion: 72, minimumSeconds: 30 * 60 },
+  'COMEDK': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 },
+  'CTET': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 },
+  'TET': { secondsPerQuestion: 60, minimumSeconds: 30 * 60 }
 }
 
 const getExamDurationSeconds = (exam: string, count: number) => {
@@ -251,13 +329,19 @@ export default function TestPage() {
     'NEET UG',
     'JEE Main',
     'JEE Advanced',
+    'KCET',
+    'DCET',
+    'COMEDK',
     'CUET UG',
+    'CUET PG',
     'NDA',
     'CDS',
     'CAT',
     'XAT',
     'CLAT',
     'AFCAT',
+    'CTET',
+    'TET',
     'State PSC'
   ]
 
