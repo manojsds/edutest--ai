@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: edutest-ai-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # ⚠️ IMPORTANT: Set these environment variables in Render Dashboard Settings:
+      # 1. GEMINI_API_KEY: Your Google Gemini API key (get from: https://aistudio.google.com/app/apikey)
+      # 2. FIREBASE_SERVICE_ACCOUNT_KEY: Firebase service account JSON (as stringified JSON)
+      # 3. FRONTEND_URL: Your Vercel frontend URL (e.g., https://your-app.vercel.app)
+      #
+      # DO NOT commit API keys or credentials here!
+      # Set them via Render Dashboard > Settings > Environment Variables
+      
+      - key: RAG_SERVICE_URL
+        value: https://edutest-ai.onrender.com
+      - key: NODE_ENV
+        value: production
