@@ -2,6 +2,7 @@
   "name": "testmaker-monorepo",
   "private": true,
   "scripts": {
+    "postinstall": "npm --prefix backend install",
     "build": "npm --prefix frontend run build",
     "dev": "npm --prefix frontend run dev",
     "start": "npm --prefix frontend run start"
