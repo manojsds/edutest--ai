@@ -10,6 +10,7 @@ import { Timer, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { ExamSetup } from '@/components/ExamSetup'
 import { DoubtBox } from '@/components/DoubtBox'
 import { Results } from '@/components/Results'
+import referralBrandMap from '@/lib/referralBrandMap.json'
 
 const API_CANDIDATES = [
   // Production: Use your deployed Render backend
@@ -384,6 +385,15 @@ export default function TestPage() {
       : null
 
     if (!ref) return
+
+    const localBrand = (referralBrandMap as Record<string, any>)[ref.trim().toUpperCase()]
+    if (localBrand) {
+      setBrand({
+        name: localBrand.name,
+        logoUrl: localBrand.logoUrl || null,
+      })
+      return
+    }
 
     const loadBranding = async () => {
       const base = apiBase || API_CANDIDATES[0]

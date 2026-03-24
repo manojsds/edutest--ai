@@ -6,13 +6,17 @@ import { useAuth } from '@/lib/authContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraduationCap, Loader2 } from 'lucide-react';
+import referralBrandMap from '@/lib/referralBrandMap.json';
 
 export default function LoginPage() {
-  const { signInWithGoogle, user, institute, isLoading } = useAuth();
+  const { signInWithCredentials, user, institute, isLoading } = useAuth();
   const router = useRouter();
-  const referralCode = typeof window !== 'undefined'
+  const initialReferralCode = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('ref')
     : null;
+  const [referralCode, setReferralCode] = useState(initialReferralCode || '');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loadingBranding, setLoadingBranding] = useState(false);
   const [branding, setBranding] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +24,13 @@ export default function LoginPage() {
 
   // Load institute branding if referral code present
   useEffect(() => {
-    if (referralCode) {
+    if (referralCode && referralCode.trim().length > 0) {
+      const localBrand = (referralBrandMap as Record<string, any>)[referralCode.trim().toUpperCase()];
+      if (localBrand) {
+        setBranding(localBrand);
+        return;
+      }
+
       setLoadingBranding(true);
       fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/institute/${referralCode}`
@@ -33,16 +43,26 @@ export default function LoginPage() {
         })
         .catch((err) => console.error('Failed to load branding:', err))
         .finally(() => setLoadingBranding(false));
+    } else {
+      setBranding(null);
     }
   }, [referralCode]);
 
-  const handleGoogleSignIn = async () => {
+  const handleCredentialsLogin = async () => {
     try {
       setError(null);
       setSigningIn(true);
-      await signInWithGoogle();
+      if (!email.trim() || !password.trim()) {
+        throw new Error('Email and password are required');
+      }
+
+      await signInWithCredentials({
+        email: email.trim(),
+        password,
+        referralCode: referralCode.trim() || undefined,
+      });
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in with Google');
+      setError(err.message || 'Failed to sign in');
     } finally {
       setSigningIn(false);
     }
@@ -50,7 +70,9 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   if (user && !isLoading) {
-    if (institute) {
+    if (referralCode) {
+      router.push(`/dashboard?ref=${encodeURIComponent(referralCode)}`);
+    } else if (institute) {
       router.push(`/dashboard/institute?ref=${institute.referralCode}`);
     } else {
       router.push('/dashboard/home');
@@ -84,8 +106,8 @@ export default function LoginPage() {
           </CardTitle>
           <p className="text-gray-600 mt-2">
             {referralCode
-              ? 'Sign in with Google to get started'
-              : 'Continue with Google to access your tests'}
+              ? 'Login with your account to access center-branded dashboard'
+              : 'Login to continue'}
           </p>
         </CardHeader>
 
@@ -96,8 +118,32 @@ export default function LoginPage() {
             </div>
           )}
 
+          <div className="space-y-3">
+            <input
+              type="email"
+              className="w-full border rounded-md p-3"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <input
+              type="password"
+              className="w-full border rounded-md p-3"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <input
+              type="text"
+              className="w-full border rounded-md p-3"
+              placeholder="Referral code (optional)"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+            />
+          </div>
+
           <Button
-            onClick={handleGoogleSignIn}
+            onClick={handleCredentialsLogin}
             disabled={isLoading || loadingBranding || signingIn}
             className="w-full py-6 text-lg font-semibold text-white"
             style={{
@@ -108,12 +154,10 @@ export default function LoginPage() {
             {signingIn || isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
+                Logging in...
               </>
             ) : (
-              <>
-                🔗 Continue with Google
-              </>
+              'Login'
             )}
           </Button>
 
@@ -121,22 +165,8 @@ export default function LoginPage() {
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
               <p className="font-semibold">✓ Joining {branding?.name || 'Coaching Center'}</p>
               <p className="mt-1">
-                You'll be added as a student after signing in. Check your dashboard to manage
-                your subscription.
+                After login, you will be redirected to this institute's white-labeled dashboard.
               </p>
-            </div>
-          )}
-
-          {!referralCode && (
-            <div className="space-y-3 text-center text-sm text-gray-600">
-              <p>or join without a coaching center</p>
-              <Button
-                variant="outline"
-                onClick={() => router.push('/dashboard/home')}
-                className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                Continue as Independent Student
-              </Button>
             </div>
           )}
         </CardContent>
