@@ -1,7 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
-const rateLimit = require('express-rate-limit');
+let rateLimit;
+try {
+  rateLimit = require('express-rate-limit');
+} catch (e) {
+  // Keep the API booting even if deploy environment skips this dependency.
+  console.warn('express-rate-limit not available, continuing without rate limiting.');
+  rateLimit = () => (req, res, next) => next();
+}
 require('dotenv').config();
 
 // Initialize Firebase (must be done before importing models)
