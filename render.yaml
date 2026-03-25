@@ -3,7 +3,7 @@ services:
     name: edutest-ai-backend
     env: node
     plan: free
-    rootDir: src/backend
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     envVars:
