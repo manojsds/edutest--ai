@@ -54,7 +54,18 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const defaultAuthContext: AuthContextType = {
+  user: null,
+  institute: null,
+  token: null,
+  isLoading: true,
+  signInWithCredentials: async () => {},
+  signInWithGoogle: async () => {},
+  logout: async () => {},
+  refreshUser: async () => {},
+};
+
+const AuthContext = createContext<AuthContextType>(defaultAuthContext);
 const TOKEN_KEY = 'edutest_auth_token';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -248,9 +259,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 }
