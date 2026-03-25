@@ -8,30 +8,8 @@ import React, {
   ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  signInWithRedirect,
-  getRedirectResult,
-  signOut,
-  onAuthStateChanged,
-  getAuth,
-  GoogleAuthProvider,
-} from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
-
-// Keep Firebase setup local to avoid module-resolution issues in some deploy setups.
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from './firebase';
 
 interface User {
   id: string;
@@ -64,12 +42,20 @@ interface AuthContextType {
   institute: Institute | null;
   token: string | null;
   isLoading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithCredentials: (payload: {
+    email: string;
+    password: string;
+    referralCode?: string;
+  }) => Promise<void>;
+  signInWithGoogle: (payload?: {
+    referralCode?: string;
+  }) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const TOKEN_KEY = 'edutest_auth_token';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -78,128 +64,137 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-backend.onrender.com';
 
-  // Check for redirect result on mount
+  // Initialize session from stored JWT
   useEffect(() => {
-    const handleRedirectResult = async () => {
+    const bootstrapSession = async () => {
       try {
-        const result = await getRedirectResult(auth);
-        if (result) {
-          // User signed in via redirect
-          const idToken = await result.user.getIdToken();
-          const referralCode = sessionStorage.getItem('referralCode') || null;
-          sessionStorage.removeItem('referralCode'); // Clean up
+        const savedToken = localStorage.getItem(TOKEN_KEY);
+        if (!savedToken) {
+          setIsLoading(false);
+          return;
+        }
 
-          // Create or get user in backend
-          const response = await fetch(`${API_URL}/api/auth/google-signin`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: result.user.email,
-              name: result.user.displayName,
-              picture: result.user.photoURL,
-              referralCode: referralCode,
-              firebaseUid: result.user.uid,
-            }),
-          });
+        setToken(savedToken);
 
-          if (response.ok) {
-            const data = await response.json();
-            setUser(data.user);
-            setToken(idToken);
+        const response = await fetch(`${API_URL}/api/auth/user-profile`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${savedToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
 
-            if (data.institute) {
-              setInstitute(data.institute);
-              router.push(`/dashboard/institute?ref=${data.institute.referralCode}`);
-            } else {
-              router.push('/dashboard/home');
-            }
-          }
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+          setInstitute(data.institute || null);
+        } else {
+          localStorage.removeItem(TOKEN_KEY);
+          setToken(null);
+          setUser(null);
+          setInstitute(null);
         }
       } catch (error) {
-        console.error('Redirect result error:', error);
+        console.error('Session bootstrap failed:', error);
+        localStorage.removeItem(TOKEN_KEY);
+        setToken(null);
+        setUser(null);
+        setInstitute(null);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    handleRedirectResult();
+    bootstrapSession();
   }, []);
 
-  // Check user on component mount
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const idToken = await firebaseUser.getIdToken();
-          setToken(idToken);
-
-          // Get or create user in backend
-          const response = await fetch(`${API_URL}/api/auth/user-profile`, {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-              'Content-Type': 'application/json',
-            },
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setUser(data.user);
-            if (data.institute) setInstitute(data.institute);
-          } else {
-            // User doesn't exist in backend yet - will be created on first action
-            setUser({
-              id: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: firebaseUser.displayName || 'User',
-              picture: firebaseUser.photoURL || undefined,
-            });
-          }
-        } catch (error) {
-          console.error('Failed to fetch user profile:', error);
-        }
-      } else {
-        setUser(null);
-        setToken(null);
-        setInstitute(null);
-      }
-      setIsLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const signInWithGoogle = async () => {
+  const signInWithCredentials = async ({ email, password, referralCode }: {
+    email: string;
+    password: string;
+    referralCode?: string;
+  }) => {
     try {
       setIsLoading(true);
-      const referralCode = typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('ref')
-        : null;
-      
-      // Store referral code in sessionStorage before redirect
-      if (referralCode) {
-        sessionStorage.setItem('referralCode', referralCode);
+
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          referralCode: referralCode || undefined,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'Login failed');
       }
 
-      // Start redirect flow
-      await signInWithRedirect(auth, googleProvider);
+      if (!data?.token || !data?.user) {
+        throw new Error('Invalid login response');
+      }
+
+      localStorage.setItem(TOKEN_KEY, data.token);
+      setToken(data.token);
+      setUser(data.user);
+      setInstitute(data.institute || null);
     } catch (error) {
-      console.error('Google sign-in failed:', error);
+      console.error('Credentials sign-in failed:', error);
       setIsLoading(false);
       throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signInWithGoogle = async ({ referralCode }: { referralCode?: string } = {}) => {
+    try {
+      setIsLoading(true);
+
+      const result = await signInWithPopup(auth, googleProvider);
+      const idToken = await result.user.getIdToken();
+
+      const response = await fetch(`${API_URL}/api/auth/google-signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken,
+          referralCode: referralCode || undefined,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'Google sign-in failed');
+      }
+
+      if (!data?.token || !data?.user) {
+        throw new Error('Invalid Google sign-in response');
+      }
+
+      localStorage.setItem(TOKEN_KEY, data.token);
+      setToken(data.token);
+      setUser(data.user);
+      setInstitute(data.institute || null);
+    } catch (error) {
+      console.error('Google sign-in failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      localStorage.removeItem(TOKEN_KEY);
       setUser(null);
       setToken(null);
       setInstitute(null);
-      router.push('/');
+      router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);
       throw error;
@@ -207,12 +202,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshUser = async () => {
-    if (!token) return;
+    const activeToken = token || localStorage.getItem(TOKEN_KEY);
+    if (!activeToken) return;
+
     try {
       const response = await fetch(`${API_URL}/api/auth/user-profile`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${activeToken}`,
           'Content-Type': 'application/json',
         },
       });
@@ -221,6 +218,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         setUser(data.user);
         if (data.institute) setInstitute(data.institute);
+      } else if (response.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        setToken(null);
+        setUser(null);
+        setInstitute(null);
       }
     } catch (error) {
       console.error('Failed to refresh user:', error);
@@ -234,6 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         institute,
         token,
         isLoading,
+        signInWithCredentials,
         signInWithGoogle,
         logout,
         refreshUser,

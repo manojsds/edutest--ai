@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-backend.onrender.com';
 
 export default function BrandingSetupPage() {
   const [referralCode, setReferralCode] = useState('');
