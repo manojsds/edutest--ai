@@ -2,15 +2,27 @@
 node_modules/
 /.next
 /frontend/.next/
+frontend/.next/
 
 # Backend credentials (do not commit service account JSON)
 /backend/edutest-477409-36c78304375d.json
 /backend/credentials/
 backend/credentials/*.json
+backend/*.json
+!backend/package.json
+!backend/package-lock.json
 
 # Test scripts (should not be committed to production)
 /backend/test-*.js
 
 # env files
 /backend/.env
+/backend/.env.production
+/backend/.env.local
 /frontend/.env
+/frontend/.env.local
+/frontend/.env.production
+/frontend/.env.*.local
+
+# Local Firebase and Google service config files
+frontend/google-services*.json

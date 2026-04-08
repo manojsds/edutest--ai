@@ -1,22 +1,21 @@
 const admin = require('firebase-admin');
-const path = require('path');
 const fs = require('fs');
 
 // Initialize Firebase Admin SDK
-const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || 
-  path.join(__dirname, '../edutest-477409-36c78304375d.json');
+const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
 try {
   let serviceAccount = null;
 
   // Preferred for cloud deploys (Render/Vercel): set full JSON in env var.
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-  } else if (fs.existsSync(serviceAccountPath)) {
+    const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+    serviceAccount = JSON.parse(rawKey);
+  } else if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
     serviceAccount = require(serviceAccountPath);
   } else {
     throw new Error(
-      'Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_KEY env var or provide GOOGLE_APPLICATION_CREDENTIALS file path.'
+      'Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_KEY or set GOOGLE_APPLICATION_CREDENTIALS to a valid file path.'
     );
   }
   

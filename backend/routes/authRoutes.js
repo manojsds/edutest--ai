@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const { admin } = require('../config/firebase');
 const User = require('../models/User');
 const Institute = require('../models/Institute');
 const { authenticateToken } = require('../middleware/authMiddleware');
@@ -116,7 +117,7 @@ router.post('/signup', async (req, res) => {
  */
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, referralCode } = req.body;
 
     // Validation
     if (!email || !password) {
@@ -127,7 +128,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Find user
-    const user = await User.findByEmail(email);
+    let user = await User.findByEmail(email);
     if (!user) {
       return res.status(401).json({ 
         error: 'Invalid credentials',
@@ -147,9 +148,35 @@ router.post('/login', async (req, res) => {
     // Update last login time
     await User.updateLastLogin(user.id);
 
-    // Get institute data if user belongs to one
+    // Validate or link institute based on referral code
     let instituteData = null;
-    if (user.instituteId) {
+    if (referralCode && referralCode !== 'direct') {
+      instituteData = await Institute.findByReferralCode(referralCode);
+      if (!instituteData) {
+        return res.status(400).json({
+          error: 'Invalid referral code',
+          message: 'The referral code you entered is not valid'
+        });
+      }
+
+      if (user.instituteId && user.instituteId !== instituteData.id) {
+        return res.status(403).json({
+          error: 'Referral mismatch',
+          message: 'This account is mapped to a different coaching center'
+        });
+      }
+
+      if (!user.instituteId) {
+        await User.update(user.id, {
+          instituteId: instituteData.id,
+          referralCode
+        });
+        await Institute.incrementStudentCount(instituteData.id);
+        user = await User.findByEmail(email);
+      }
+    }
+
+    if (!instituteData && user.instituteId) {
       instituteData = await Institute.findById(user.instituteId);
     }
 
@@ -174,6 +201,7 @@ router.post('/login', async (req, res) => {
       institute: instituteData ? {
         id: instituteData.id,
         name: instituteData.name,
+        referralCode: instituteData.referralCode,
         logoUrl: instituteData.logoUrl,
         primaryColor: instituteData.primaryColor,
         secondaryColor: instituteData.secondaryColor,
@@ -248,7 +276,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     if (phone) updateData.phone = phone;
     if (profilePicture) updateData.profilePicture = profilePicture;
 
-    const updatedUser = await User.update(req.userId, updateData);
+    const updatedUser = await User.update(req.user.id, updateData);
 
     res.json({
       success: true,
@@ -267,13 +295,27 @@ router.put('/profile', authenticateToken, async (req, res) => {
  */
 router.post('/google-signin', async (req, res) => {
   try {
-    const { email, name, picture, referralCode, firebaseUid } = req.body;
+    const { idToken, referralCode } = req.body;
 
     // Validation
-    if (!email || !firebaseUid) {
+    if (!idToken) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        details: 'Email and firebaseUid are required'
+        details: 'idToken is required'
+      });
+    }
+
+    // Verify the Firebase token server-side so user identity cannot be spoofed.
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const firebaseUid = decodedToken.uid;
+    const email = decodedToken.email;
+    const name = decodedToken.name || 'User';
+    const picture = decodedToken.picture || null;
+
+    if (!email || !firebaseUid) {
+      return res.status(401).json({
+        error: 'Invalid Google token',
+        message: 'Token does not contain required user details'
       });
     }
 
@@ -281,6 +323,21 @@ router.post('/google-signin', async (req, res) => {
     let user = await User.findByEmail(email);
 
     if (user) {
+      if (user.firebaseUid && user.firebaseUid !== firebaseUid) {
+        return res.status(403).json({
+          error: 'Account conflict',
+          message: 'This email is already linked to another Google account'
+        });
+      }
+
+      if (!user.firebaseUid) {
+        user = await User.update(user.id, {
+          firebaseUid,
+          authType: 'google',
+          profilePicture: user.profilePicture || picture
+        });
+      }
+
       // User exists, update last login
       await User.updateLastLogin(user.id);
     } else {
@@ -301,7 +358,7 @@ router.post('/google-signin', async (req, res) => {
 
       // Create user via Google OAuth (no password)
       const userData = {
-        name: name || 'User',
+        name,
         email,
         password: null, // No password for OAuth users
         firebaseUid,
