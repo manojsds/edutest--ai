@@ -39,7 +39,72 @@ app.use(cors({
 app.use(express.json());
 
 // Gemini API configuration
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_MODELS = (process.env.GEMINI_MODELS || 'gemini-2.5-flash,gemini-2.0-flash')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+const GEMINI_MAX_RETRIES = Number(process.env.GEMINI_MAX_RETRIES || 3);
+
+const isRetryableGeminiStatus = (status) => status === 429 || status === 500 || status === 503;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function generateWithGemini(prompt) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured');
+  }
+
+  let lastError = null;
+
+  for (const model of GEMINI_MODELS) {
+    const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+    for (let attempt = 1; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+      const response = await fetch(`${modelUrl}?key=${process.env.GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }]
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return { result, model, attempt };
+      }
+
+      const errorText = await response.text();
+      const retryable = isRetryableGeminiStatus(response.status);
+      lastError = new Error(`API request failed with status ${response.status}: ${errorText}`);
+
+      console.error('Gemini API Error:', {
+        model,
+        attempt,
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+
+      if (retryable && attempt < GEMINI_MAX_RETRIES) {
+        const backoffMs = 500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 250);
+        console.warn(`Retrying Gemini request in ${backoffMs}ms (model=${model}, attempt=${attempt})`);
+        await wait(backoffMs);
+        continue;
+      }
+
+      // Non-retryable error or retries exhausted for this model: try next model.
+      break;
+    }
+  }
+
+  throw lastError || new Error('Gemini request failed with unknown error');
+}
 
 // RAG Service Configuration
 const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'https://edutest-ai.onrender.com';
@@ -585,37 +650,9 @@ JSON Format:
 ]`;
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY is not configured');
-    }
-
     console.log('Making request to Gemini API...');
-    const response = await fetch(`${GEMINI_API_URL}?key=${process.env.GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }]
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText
-      });
-      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
-    }
-
-    const result = await response.json();
-    console.log('Received response from Gemini API');
+    const { result, model, attempt } = await generateWithGemini(prompt);
+    console.log(`Received response from Gemini API (model=${model}, attempt=${attempt})`);
 
     if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts || !result.candidates[0].content.parts[0]) {
       console.error('Unexpected API response structure:', result);
