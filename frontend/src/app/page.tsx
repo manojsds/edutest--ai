@@ -14,7 +14,7 @@ import referralBrandMap from '@/lib/referralBrandMap.json'
 
 const API_CANDIDATES = [
   // Production: Use your deployed Render backend
-  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-backend.onrender.com',
+  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-2.onrender.com',
   // Fallback: Try local development servers
   'http://localhost:5001',
   'http://localhost:5000'
@@ -352,7 +352,7 @@ export default function TestPage() {
     'State PSC'
   ]
 
-  // Resolve backend base (probe 5001 then 5000)
+  // Resolve backend base (production first, then local fallbacks)
   const [apiBase, setApiBase] = useState<string | null>(null)
   useEffect(() => {
     let mounted = true
@@ -653,7 +653,7 @@ export default function TestPage() {
             <p className="text-lg text-red-600 mb-4">Error Generating Questions</p>
             <p className="text-sm text-gray-600 text-center mb-4">
               {error.includes('Failed to fetch') ? 
-                'Unable to connect to the server. Please make sure the backend is running on port 5001.' :
+                'Unable to connect to the backend server. Check NEXT_PUBLIC_API_URL and ensure your Render service is live.' :
                 error
               }
             </p>
