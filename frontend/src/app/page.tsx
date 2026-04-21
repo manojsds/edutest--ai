@@ -493,12 +493,20 @@ export default function TestPage() {
 
       if (!response.ok) {
         const errorText = await response.text()
+        let parsedMessage = ''
+        try {
+          const parsed = JSON.parse(errorText)
+          parsedMessage = parsed?.message || parsed?.error || ''
+        } catch {
+          // Keep raw text fallback when response is not JSON.
+        }
+
         console.error('Server Error:', {
           status: response.status,
           statusText: response.statusText,
           body: errorText
         })
-        throw new Error(errorText || `Failed to fetch questions: ${response.status} ${response.statusText}`)
+        throw new Error(parsedMessage || errorText || `Failed to fetch questions: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()

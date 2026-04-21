@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const { jsonrepair } = require('jsonrepair');
 let rateLimit;
 try {
   rateLimit = require('express-rate-limit');
@@ -859,8 +860,16 @@ JSON Format:
       try {
         return JSON.parse(repaired);
       } catch (repairError) {
-        console.error('JSON repair failed:', repairError.message);
-        throw new Error(`Cannot parse LLM response as JSON: ${repairError.message}`);
+        console.warn('Manual JSON repair failed, trying jsonrepair fallback:', repairError.message);
+      }
+
+      // Step 6: Use jsonrepair for harder malformed JSON cases
+      try {
+        const repairedByLib = jsonrepair(jsonStr);
+        return JSON.parse(repairedByLib);
+      } catch (libError) {
+        console.error('jsonrepair fallback failed:', libError.message);
+        throw new Error(`Cannot parse LLM response as JSON: ${libError.message}`);
       }
     };
 
