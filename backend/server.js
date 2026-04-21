@@ -38,18 +38,26 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Gemini API configuration
-const GEMINI_MODELS = (process.env.GEMINI_MODELS || 'gemini-2.5-flash,gemini-2.0-flash')
+// LLM provider configuration (cheaper defaults + fallback)
+const GEMINI_MODELS = (process.env.GEMINI_MODELS || 'gemini-1.5-flash,gemini-1.5-flash-8b')
   .split(',')
   .map((m) => m.trim())
   .filter(Boolean);
-const GEMINI_MAX_RETRIES = Number(process.env.GEMINI_MAX_RETRIES || 3);
+const GROQ_MODELS = (process.env.GROQ_MODELS || 'llama-3.1-8b-instant,llama-3.3-70b-versatile')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+const LLM_PROVIDER_ORDER = (process.env.LLM_PROVIDER_ORDER || 'gemini,groq')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+const LLM_MAX_RETRIES = Number(process.env.LLM_MAX_RETRIES || process.env.GEMINI_MAX_RETRIES || 3);
 
-const isRetryableGeminiStatus = (status) => status === 429 || status === 500 || status === 503;
+const isRetryableLlmStatus = (status) => status === 429 || status === 500 || status === 503;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function generateWithGemini(prompt) {
+async function tryGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not configured');
   }
@@ -59,7 +67,7 @@ async function generateWithGemini(prompt) {
   for (const model of GEMINI_MODELS) {
     const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-    for (let attempt = 1; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= LLM_MAX_RETRIES; attempt++) {
       const response = await fetch(`${modelUrl}?key=${process.env.GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
@@ -67,43 +75,121 @@ async function generateWithGemini(prompt) {
         },
         body: JSON.stringify({
           contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
-        })
+            parts: [{ text: prompt }],
+          }],
+        }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        return { result, model, attempt };
+        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          throw new Error('Gemini returned empty content');
+        }
+        return { text, provider: 'gemini', model, attempt };
       }
 
       const errorText = await response.text();
-      const retryable = isRetryableGeminiStatus(response.status);
-      lastError = new Error(`API request failed with status ${response.status}: ${errorText}`);
+      const retryable = isRetryableLlmStatus(response.status);
+      lastError = new Error(`Gemini failed with status ${response.status}: ${errorText}`);
 
       console.error('Gemini API Error:', {
         model,
         attempt,
         status: response.status,
         statusText: response.statusText,
-        body: errorText
+        body: errorText,
       });
 
-      if (retryable && attempt < GEMINI_MAX_RETRIES) {
+      if (retryable && attempt < LLM_MAX_RETRIES) {
         const backoffMs = 500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 250);
-        console.warn(`Retrying Gemini request in ${backoffMs}ms (model=${model}, attempt=${attempt})`);
+        console.warn(`Retrying Gemini in ${backoffMs}ms (model=${model}, attempt=${attempt})`);
         await wait(backoffMs);
         continue;
       }
 
-      // Non-retryable error or retries exhausted for this model: try next model.
       break;
     }
   }
 
-  throw lastError || new Error('Gemini request failed with unknown error');
+  throw lastError || new Error('Gemini request failed');
+}
+
+async function tryGroq(prompt) {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not configured');
+  }
+
+  let lastError = null;
+
+  for (const model of GROQ_MODELS) {
+    for (let attempt = 1; attempt <= LLM_MAX_RETRIES; attempt++) {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const text = result?.choices?.[0]?.message?.content;
+        if (!text) {
+          throw new Error('Groq returned empty content');
+        }
+        return { text, provider: 'groq', model, attempt };
+      }
+
+      const errorText = await response.text();
+      const retryable = isRetryableLlmStatus(response.status);
+      lastError = new Error(`Groq failed with status ${response.status}: ${errorText}`);
+
+      console.error('Groq API Error:', {
+        model,
+        attempt,
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText,
+      });
+
+      if (retryable && attempt < LLM_MAX_RETRIES) {
+        const backoffMs = 500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 250);
+        console.warn(`Retrying Groq in ${backoffMs}ms (model=${model}, attempt=${attempt})`);
+        await wait(backoffMs);
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  throw lastError || new Error('Groq request failed');
+}
+
+async function generateWithLlm(prompt) {
+  let lastError = null;
+
+  for (const provider of LLM_PROVIDER_ORDER) {
+    try {
+      if (provider === 'gemini') {
+        return await tryGemini(prompt);
+      }
+      if (provider === 'groq') {
+        return await tryGroq(prompt);
+      }
+    } catch (error) {
+      lastError = error;
+      console.warn(`LLM provider ${provider} failed, trying next provider.`, error.message);
+    }
+  }
+
+  throw lastError || new Error('No LLM provider succeeded');
 }
 
 // RAG Service Configuration
@@ -650,16 +736,9 @@ JSON Format:
 ]`;
     }
 
-    console.log('Making request to Gemini API...');
-    const { result, model, attempt } = await generateWithGemini(prompt);
-    console.log(`Received response from Gemini API (model=${model}, attempt=${attempt})`);
-
-    if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts || !result.candidates[0].content.parts[0]) {
-      console.error('Unexpected API response structure:', result);
-      throw new Error('Invalid API response structure');
-    }
-
-    const text = result.candidates[0].content.parts[0].text;
+    console.log('Making request to LLM API...');
+    const { text, provider, model, attempt } = await generateWithLlm(prompt);
+    console.log(`Received response from ${provider} (model=${model}, attempt=${attempt})`);
     console.log('AI Response Text:', text);
 
     // Clean and parse the response
