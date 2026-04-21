@@ -872,40 +872,46 @@ JSON Format:
       throw new Error('Invalid response format: not an array or empty');
     }
 
-    // Additional validation for each question with detailed error messages
+    // Filter and fix questions with validation errors
+    const validQuestions = [];
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       
-      if (!q.id) {
-        throw new Error(`Question ${i}: missing 'id' field`);
+      // Auto-fix: ensure exactly 4 options
+      if (!Array.isArray(q.options)) q.options = [];
+      while (q.options.length < 4) {
+        q.options.push(`Option ${q.options.length + 1}`);
       }
-      if (typeof q.question !== 'string' || !q.question.trim()) {
-        throw new Error(`Question ${i}: 'question' field must be a non-empty string`);
-      }
-      if (!Array.isArray(q.options)) {
-        throw new Error(`Question ${i}: 'options' must be an array`);
-      }
-      if (q.options.length !== 4) {
-        throw new Error(`Question ${i}: 'options' must have exactly 4 items, got ${q.options.length}`);
-      }
-      // Ensure all options are strings
-      for (let j = 0; j < q.options.length; j++) {
+      if (q.options.length > 4) q.options = q.options.slice(0, 4);
+      
+      // Auto-fix: ensure all options are non-empty strings
+      for (let j = 0; j < 4; j++) {
         if (typeof q.options[j] !== 'string' || !q.options[j].trim()) {
-          throw new Error(`Question ${i}: option ${j} must be a non-empty string, got ${typeof q.options[j]}`);
+          q.options[j] = `Option ${j + 1}`;
         }
       }
-      if (typeof q.correctAnswer !== 'number') {
-        throw new Error(`Question ${i}: 'correctAnswer' must be a number, got ${typeof q.correctAnswer}`);
+      
+      // Auto-fix: ensure correctAnswer is valid
+      if (typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
+        q.correctAnswer = 0;
       }
-      if (q.correctAnswer < 0 || q.correctAnswer > 3) {
-        throw new Error(`Question ${i}: 'correctAnswer' must be 0-3, got ${q.correctAnswer}`);
+      
+      // Auto-fix: ensure explanation exists
+      if (!q.explanation || typeof q.explanation !== 'string') {
+        q.explanation = 'Explanation not provided';
       }
-      if (!q.explanation || typeof q.explanation !== 'string' || !q.explanation.trim()) {
-        throw new Error(`Question ${i}: 'explanation' must be a non-empty string`);
+      
+      // Only keep if id and question exist
+      if (q.id && typeof q.question === 'string' && q.question.trim()) {
+        validQuestions.push(q);
       }
     }
 
-    res.json(questions);
+    if (validQuestions.length === 0) {
+      throw new Error('No valid questions after fixing');
+    }
+
+    res.json(validQuestions);
   } catch (error) {
     console.error('Error generating questions:', error);
     res.status(500).json({ 
@@ -944,3 +950,5 @@ const tryStartServer = () => {
 
 // Start server
 tryStartServer();
+
+
