@@ -619,6 +619,35 @@ const getSectionQuestionTargets = (sectionWeightage, totalCount) => {
     .map((t) => ({ section: t.section, count: t.count }));
 };
 
+const getQuestionStyleMixGuide = (subject, count) => {
+  const subjectKey = String(subject || '').toLowerCase();
+  const total = Math.max(1, Number(count) || 1);
+
+  if (subjectKey.includes('upsc')) {
+    const complexCount = Math.max(1, Math.round(total * 0.35));
+    return [
+      'Standard conceptual MCQ with close distractors',
+      `Statement-based items (2-3 statements, choose correct combination) at least ${Math.max(1, Math.round(complexCount * 0.5))}`,
+      `Assertion-Reason or Match-the-following at least ${Math.max(1, Math.round(complexCount * 0.3))}`,
+      `Passage/caselet or map-geography analytical item at least ${Math.max(1, complexCount - Math.max(1, Math.round(complexCount * 0.5)) - Math.max(1, Math.round(complexCount * 0.3)))}`
+    ];
+  }
+
+  if (subjectKey.includes('jee') || subjectKey.includes('neet')) {
+    return [
+      'Concept + application MCQ',
+      'Numerical/logical multi-step MCQ where appropriate',
+      'Data/graph/experimental scenario-based MCQ where appropriate'
+    ];
+  }
+
+  return [
+    'Standard conceptual MCQ',
+    'Analytical scenario-based MCQ',
+    'Statement-based MCQ where relevant'
+  ];
+};
+
 // Questions endpoint
 app.post('/api/questions', async (req, res) => {
   try {
@@ -648,6 +677,9 @@ app.post('/api/questions', async (req, res) => {
       .join(', ');
 
     const difficultyGuide = `Easy ${normalizedBlueprint.difficultyDistribution.easy}%, Medium ${normalizedBlueprint.difficultyDistribution.medium}%, Hard ${normalizedBlueprint.difficultyDistribution.hard}%`;
+    const questionStyleMixGuide = getQuestionStyleMixGuide(subject, count)
+      .map((s, i) => `${i + 1}. ${s}`)
+      .join('\n');
 
     const markingGuide = `Correct +${normalizedBlueprint.markingScheme.correct}, Wrong ${normalizedBlueprint.markingScheme.wrong}, Unattempted ${normalizedBlueprint.markingScheme.unattempted}`;
     
@@ -691,10 +723,18 @@ CRITICAL EXAM INSTRUCTIONS:
 9. Approximate difficulty mix for this generated set: ${difficultyGuide}
 10. Marking scheme context: ${markingGuide}
 11. Target section-wise question counts (sum must be ${count}): ${sectionTargetGuide}
+12. Enforce this question-style mix:
+${questionStyleMixGuide}
 
 QUESTION FORMAT MIX:
 - 85% standard single-correct MCQs
 - 15% analytical or statement-based (only if it fits the selected exam pattern)
+
+COMPLEXITY RULES:
+- For statement-based items, include explicit statements in the question body (e.g., Statement 1, Statement 2, Statement 3).
+- For assertion-reason items, include Assertion and Reason explicitly in the question text.
+- For passage/caselet items, include a short passage first and ask one question based on it.
+- For map/geography items, use map-like spatial reasoning in text form (region, direction, river-basin, monsoon flow, latitude-longitude logic).
 
 JSON Format (EXACT):
 [
@@ -723,6 +763,14 @@ QUESTION GUIDELINES:
 8. Approximate difficulty mix for this generated set: ${difficultyGuide}
 9. Marking scheme context: ${markingGuide}
 10. Target section-wise question counts (sum must be ${count}): ${sectionTargetGuide}
+11. Enforce this question-style mix:
+${questionStyleMixGuide}
+
+COMPLEXITY RULES:
+- For statement-based items, include explicit statements in the question body.
+- For assertion-reason items, include Assertion and Reason explicitly in the question text.
+- For passage/caselet items, include a short passage first and ask one question based on it.
+- For map/geography items, use map-like spatial reasoning in text form.
 
 JSON Format:
 [
