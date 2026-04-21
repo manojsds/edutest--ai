@@ -872,13 +872,36 @@ JSON Format:
       throw new Error('Invalid response format: not an array or empty');
     }
 
-    // Additional validation for each question
+    // Additional validation for each question with detailed error messages
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      if (!q.id || typeof q.question !== 'string' || !Array.isArray(q.options) || 
-          q.options.length !== 4 || typeof q.correctAnswer !== 'number' || 
-          q.correctAnswer < 0 || q.correctAnswer > 3 || !q.explanation) {
-        throw new Error(`Invalid question format at index ${i}`);
+      
+      if (!q.id) {
+        throw new Error(`Question ${i}: missing 'id' field`);
+      }
+      if (typeof q.question !== 'string' || !q.question.trim()) {
+        throw new Error(`Question ${i}: 'question' field must be a non-empty string`);
+      }
+      if (!Array.isArray(q.options)) {
+        throw new Error(`Question ${i}: 'options' must be an array`);
+      }
+      if (q.options.length !== 4) {
+        throw new Error(`Question ${i}: 'options' must have exactly 4 items, got ${q.options.length}`);
+      }
+      // Ensure all options are strings
+      for (let j = 0; j < q.options.length; j++) {
+        if (typeof q.options[j] !== 'string' || !q.options[j].trim()) {
+          throw new Error(`Question ${i}: option ${j} must be a non-empty string, got ${typeof q.options[j]}`);
+        }
+      }
+      if (typeof q.correctAnswer !== 'number') {
+        throw new Error(`Question ${i}: 'correctAnswer' must be a number, got ${typeof q.correctAnswer}`);
+      }
+      if (q.correctAnswer < 0 || q.correctAnswer > 3) {
+        throw new Error(`Question ${i}: 'correctAnswer' must be 0-3, got ${q.correctAnswer}`);
+      }
+      if (!q.explanation || typeof q.explanation !== 'string' || !q.explanation.trim()) {
+        throw new Error(`Question ${i}: 'explanation' must be a non-empty string`);
       }
     }
 
