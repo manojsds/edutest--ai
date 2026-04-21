@@ -789,20 +789,83 @@ JSON Format:
     console.log(`Received response from ${provider} (model=${model}, attempt=${attempt})`);
     console.log('AI Response Text:', text);
 
-    // Clean and parse the response
-    let jsonText = text.trim();
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/```\s*/, '').replace(/\s*```$/, '');
-    }
+    // Helper: Repair common JSON issues from LLM output
+    const repairJSON = (rawStr) => {
+      // Step 1: Extract JSON array if wrapped in markdown
+      let jsonStr = rawStr.trim();
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.replace(/```json\s*/, '').replace(/\s*```$/, '');
+      } else if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/```\s*/, '').replace(/\s*```$/, '');
+      }
 
-    const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      jsonText = jsonMatch[0];
-    }
+      // Step 2: Extract just the array portion if there's extra text
+      const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        jsonStr = arrayMatch[0];
+      }
 
-    const questions = JSON.parse(jsonText);
+      // Step 3: Try to parse as-is first
+      try {
+        return JSON.parse(jsonStr);
+      } catch (firstError) {
+        console.warn('Initial JSON parse failed, attempting repair:', firstError.message);
+      }
+
+      // Step 4: Repair common issues using character-by-character parsing
+      let repaired = '';
+      let inString = false;
+      let stringChar = '';
+      let i = 0;
+      while (i < jsonStr.length) {
+        const char = jsonStr[i];
+        const nextChar = jsonStr[i + 1];
+
+        if (!inString && (char === '"' || char === "'")) {
+          // Starting a string
+          inString = true;
+          stringChar = char;
+          repaired += '"'; // Always use double quotes
+          i++;
+        } else if (inString && char === stringChar) {
+          // Ending a string
+          inString = false;
+          repaired += '"'; // Always use double quotes
+          i++;
+        } else if (inString && char === '"' && stringChar === '"') {
+          // Unescaped quote inside a double-quoted string
+          repaired += '\\"';
+          i++;
+        } else if (inString && char === '\\' && nextChar === 'n') {
+          // Keep escaped newline
+          repaired += '\\n';
+          i += 2;
+        } else if (inString && char === '\n') {
+          // Escape actual newline
+          repaired += '\\n';
+          i++;
+        } else if (inString && char === '\\' && nextChar && nextChar !== 'n' && nextChar !== '"' && nextChar !== '\\') {
+          // Remove invalid escape, keep the char
+          i++;
+          repaired += jsonStr[i];
+          i++;
+        } else {
+          repaired += char;
+          i++;
+        }
+      }
+
+      // Step 5: Try parsing repaired JSON
+      try {
+        return JSON.parse(repaired);
+      } catch (repairError) {
+        console.error('JSON repair failed:', repairError.message);
+        throw new Error(`Cannot parse LLM response as JSON: ${repairError.message}`);
+      }
+    };
+
+    // Clean and parse the response with repair logic
+    const questions = repairJSON(text);
 
     // Validate the structure
     if (!Array.isArray(questions) || questions.length === 0) {
