@@ -1,8 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {
-    root: __dirname,
+  // Images from external domains (for institute logos)
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+    ],
   },
+  // Silence hydration warnings from browser extensions
+  reactStrictMode: true,
 }
 
 module.exports = nextConfig

@@ -359,7 +359,10 @@ export default function TestPage() {
     const probe = async () => {
       for (const url of API_CANDIDATES) {
         try {
-          const res = await fetch(`${url}/api/test`, { method: 'GET' })
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 3000) // 3s timeout per candidate
+          const res = await fetch(`${url}/api/test`, { method: 'GET', signal: controller.signal })
+          clearTimeout(timeoutId)
           if (res.ok) {
             if (mounted) setApiBase(url)
             console.log('Using backend:', url)
@@ -369,7 +372,9 @@ export default function TestPage() {
           // ignore and try next
         }
       }
+      // All candidates failed — default to first (production URL) and let individual requests show errors
       if (mounted) setApiBase(API_CANDIDATES[0])
+      console.warn('All backend candidates failed. Using default:', API_CANDIDATES[0])
     }
     probe()
     return () => { mounted = false }
@@ -395,10 +400,12 @@ export default function TestPage() {
       return
     }
 
+    // Wait for apiBase to be resolved before hitting the network
+    if (apiBase === null) return
+
     const loadBranding = async () => {
-      const base = apiBase || API_CANDIDATES[0]
       try {
-        const response = await fetch(`${base}/api/auth/institute/${encodeURIComponent(ref)}`)
+        const response = await fetch(`${apiBase}/api/auth/institute/${encodeURIComponent(ref)}`)
         if (!response.ok) return
         const data = await response.json()
         if (data?.institute) {
@@ -572,9 +579,56 @@ export default function TestPage() {
     }
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsTestComplete(true)
     setShowResults(true)
+
+    // Save test result to backend (best-effort, don't block UI)
+    try {
+      const activeToken = typeof window !== 'undefined' ? localStorage.getItem('edutest_auth_token') : null
+      if (activeToken && questions.length > 0) {
+        const base = apiBase || API_CANDIDATES[0]
+        const correctAnswersList = questions.map(q => q.correctAnswer)
+        const correctCount = answers.filter((a, i) => a === questions[i]?.correctAnswer).length
+        const wrongCount = answers.filter((a, i) => a !== null && a !== questions[i]?.correctAnswer).length
+        const skippedCount = answers.filter(a => a === null).length
+        const score = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0
+
+        // Identify weak topics (questions answered wrong)
+        const weakTopicSet = new Set<string>()
+        answers.forEach((a, i) => {
+          if (a !== null && a !== questions[i]?.correctAnswer) {
+            weakTopicSet.add(userInput || 'General')
+          }
+        })
+
+        await fetch(`${base}/api/tests/save`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            subject: selectedExam,
+            topic: userInput || 'General',
+            examType: 'practice',
+            userAnswers: answers,
+            correctAnswers: correctAnswersList,
+            totalQuestions: questions.length,
+            correctCount,
+            wrongCount,
+            skippedCount,
+            score,
+            timeSpent: getExamDurationSeconds(selectedExam, questionCount) - timeLeft,
+            timeLimit: getExamDurationSeconds(selectedExam, questionCount),
+            weakTopics: Array.from(weakTopicSet),
+          }),
+        })
+      }
+    } catch (e) {
+      // Non-blocking — don't show error to user
+      console.warn('Failed to save test result:', e)
+    }
   }
 
   const calculateResultStats = () => {

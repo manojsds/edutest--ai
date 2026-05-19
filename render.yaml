@@ -6,16 +6,25 @@ services:
     rootDir: backend
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
-      # ⚠️ IMPORTANT: Set these environment variables in Render Dashboard Settings:
-      # 1. GEMINI_API_KEY: Your Google Gemini API key (get from: https://aistudio.google.com/app/apikey)
-      # 2. FIREBASE_SERVICE_ACCOUNT_KEY: Firebase service account JSON (as stringified JSON)
-      # 3. FRONTEND_URL: Your Vercel frontend URL (e.g., https://your-app.vercel.app)
-      #
-      # DO NOT commit API keys or credentials here!
-      # Set them via Render Dashboard > Settings > Environment Variables
-      
-      - key: RAG_SERVICE_URL
-        value: https://edutest-ai.onrender.com
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 5000
+      - key: LLM_PROVIDER_ORDER
+        value: gemini,groq
+      - key: GEMINI_MODELS
+        value: gemini-1.5-flash,gemini-1.5-flash-8b
+      - key: GROQ_MODELS
+        value: llama-3.1-8b-instant,llama-3.3-70b-versatile
+      - key: LLM_MAX_RETRIES
+        value: 3
+      # ⚠️ Set these in Render Dashboard → Environment (never commit secrets):
+      # GEMINI_API_KEY
+      # GROQ_API_KEY
+      # FIREBASE_SERVICE_ACCOUNT_KEY  (paste entire JSON as one line)
+      # JWT_SECRET                    (random 32+ char string)
+      # FRONTEND_URL                  (your Vercel URL)
+      # RAZORPAY_KEY_ID
+      # RAZORPAY_KEY_SECRET

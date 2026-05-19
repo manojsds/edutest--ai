@@ -199,19 +199,19 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Button
                   variant="outline"
-                  onClick={() => router.push('/history')}
-                  className="h-12"
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Test History
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/analytics')}
+                  onClick={() => router.push('/dashboard/performance')}
                   className="h-12"
                 >
                   <BarChart3 className="mr-2 h-4 w-4" />
-                  Analytics
+                  My Performance
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/pricing')}
+                  className="h-12"
+                >
+                  <Award className="mr-2 h-4 w-4" />
+                  Upgrade Plan
                 </Button>
               </div>
             </CardContent>

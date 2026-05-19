@@ -16,7 +16,7 @@ require('dotenv').config();
 require('./config/firebase');
 
 const app = express();
-const ports = [5000, 5001, 5002, 3000, 3001]; // List of ports to try
+const ports = [5000, 5001, 5002, 5003]; // Backend-only ports (never conflict with frontend 3000/3001)
 let currentPortIndex = 0;
 
 // Rate limiting for public endpoints
@@ -33,9 +33,22 @@ const publicLimiter = rateLimit({
 
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [/\.vercel\.app$/, /\.edutest\.ai$/, process.env.FRONTEND_URL].filter(Boolean)
-    : ['http://localhost:3000', 'http://localhost:3001']
+  origin: process.env.NODE_ENV === 'production'
+    ? (origin, callback) => {
+        // Allow requests with no origin (mobile apps, curl, Postman)
+        if (!origin) return callback(null, true);
+        const allowed = [
+          /\.vercel\.app$/,
+          /\.edutest\.ai$/,
+          /\.onrender\.com$/,
+        ];
+        if (process.env.FRONTEND_URL) {
+          try { allowed.push(new RegExp('^' + process.env.FRONTEND_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$')); } catch {}
+        }
+        const isAllowed = allowed.some(pattern => pattern.test(origin));
+        callback(isAllowed ? null : new Error('CORS not allowed'), isAllowed);
+      }
+    : true // Allow all origins in development
 }));
 app.use(express.json());
 
@@ -198,12 +211,17 @@ const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'https://edutest-ai.onren
 
 // Basic route for testing the server
 app.get('/', (req, res) => {
-  res.json({ message: 'Backend is working!' });
+  res.json({ message: 'Backend is working!', version: '1.0.0', timestamp: new Date().toISOString() });
 });
 
 // Test endpoint
 app.get('/api/test', (req, res) => {
-  res.json({ message: 'API endpoint is working!' });
+  res.json({ message: 'API endpoint is working!', timestamp: new Date().toISOString() });
+});
+
+// Health check endpoint (used by Render, uptime monitors, and frontend probe)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
 // RAG Service Health Check
@@ -271,10 +289,22 @@ app.post('/api/rag/search', async (req, res) => {
 });
 
 // Mount routes
-app.use('/api/auth', require('./routes/authRoutes')); // Authentication routes
-app.use('/api', require('./routes/explanations'));
-app.use('/api', require('./routes/payment'));
-// app.use('/api', require('./routes/feedback')); // TODO: Create feedback route
+app.use('/api/auth', require('./routes/authRoutes'));       // Auth: signup, login, profile
+app.use('/api/tests', require('./routes/testHistory'));     // Test history, performance, daily gate
+app.use('/api/institute', require('./routes/instituteAdmin')); // Institute admin dashboard
+app.use('/api', require('./routes/explanations'));          // AI explanations
+app.use('/api', require('./routes/payment'));               // Payments (Cashfree)
+
+// Startup validation — warn about missing keys so issues are obvious in logs
+const missingKeys = [];
+if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key') missingKeys.push('GEMINI_API_KEY');
+if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'your_groq_api_key') missingKeys.push('GROQ_API_KEY');
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('change_this')) {
+  console.warn('⚠️  JWT_SECRET is using the default insecure value. Set a strong secret in .env for production.');
+}
+if (missingKeys.length > 0) {
+  console.warn(`⚠️  Missing or placeholder API keys: ${missingKeys.join(', ')}. Question generation will fail until these are set.`);
+}
 
 // ============================================
 // IMPROVED RAG: Perplexity-Style Architecture
@@ -649,8 +679,8 @@ const getQuestionStyleMixGuide = (subject, count) => {
   ];
 };
 
-// Questions endpoint
-app.post('/api/questions', async (req, res) => {
+// Questions endpoint (rate-limited for unauthenticated users)
+app.post('/api/questions', publicLimiter, async (req, res) => {
   try {
     const {
       subject = 'UPSC',
@@ -934,7 +964,7 @@ JSON Format:
 // Function to try starting the server on different ports
 const tryStartServer = () => {
   if (currentPortIndex >= ports.length) {
-    console.error('Could not find an available port');
+    console.error('Could not find an available port. Tried:', ports.join(', '));
     process.exit(1);
   }
 
@@ -951,9 +981,13 @@ const tryStartServer = () => {
       }
     })
     .on('listening', () => {
-      console.log(`Server running on port ${port}`);
-      console.log(`Test endpoint: http://localhost:${port}/api/test`);
-      console.log(`Questions endpoint: POST http://localhost:${port}/api/questions`);
+      console.log(`\n🚀 EduTest AI Backend running on port ${port}`);
+      console.log(`   Health:    http://localhost:${port}/health`);
+      console.log(`   Test:      http://localhost:${port}/api/test`);
+      console.log(`   Questions: POST http://localhost:${port}/api/questions`);
+      console.log(`   LLM order: ${LLM_PROVIDER_ORDER.join(' → ')}`);
+      console.log(`   Gemini models: ${GEMINI_MODELS.join(', ')}`);
+      console.log(`   Groq models: ${GROQ_MODELS.join(', ')}\n`);
     });
 };
 

@@ -28,14 +28,24 @@ try {
   console.log(`📦 Project: ${serviceAccount.project_id}`);
 } catch (error) {
   console.error('❌ Firebase initialization error:', error.message);
-  process.exit(1);
+  console.error('⚠️  Server will continue without Firebase. Auth routes will not work.');
+  // Do NOT exit — allow the questions/explain endpoints to still serve
 }
 
 // Firestore database instance
-const db = admin.firestore();
+let db = null;
+let bucket = null;
 
-// Cloud Storage bucket
-const bucket = admin.storage().bucket();
+try {
+  if (admin.apps && admin.apps.length > 0) {
+    db = admin.firestore();
+    bucket = admin.storage().bucket();
+  } else {
+    console.warn('⚠️  Firebase not initialized; skipping Firestore and Storage setup.');
+  }
+} catch (e) {
+  console.warn('⚠️  Firebase services unavailable:', e.message);
+}
 
 module.exports = {
   admin,

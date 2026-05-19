@@ -21,6 +21,84 @@ function generateToken(userId, email) {
 }
 
 /**
+ * POST /api/auth/institute/register
+ * Register a new coaching center (institute admin)
+ */
+router.post('/institute/register', async (req, res) => {
+  try {
+    const {
+      instituteName, contactName, email, phone,
+      password, examFocus, studentCount, referralCode, city
+    } = req.body;
+
+    if (!instituteName || !email || !password || !contactName || !referralCode) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Check referral code uniqueness
+    const existing = await Institute.findByReferralCode(referralCode.toUpperCase());
+    if (existing) {
+      return res.status(400).json({ error: 'Referral code already taken. Choose a different one.' });
+    }
+
+    // Check email uniqueness
+    const existingUser = await User.emailExists(email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already registered. Please login.' });
+    }
+
+    // Create institute
+    const institute = await Institute.create({
+      name: instituteName,
+      email,
+      phone: phone || null,
+      referralCode: referralCode.toUpperCase(),
+      examFocus: examFocus || 'General',
+      city: city || null,
+      commissionPercentage: 10,
+      status: 'active',
+    });
+
+    // Create admin user linked to this institute
+    const adminUser = await User.create({
+      name: contactName,
+      email,
+      password,
+      instituteId: institute.id,
+      referralCode: referralCode.toUpperCase(),
+      role: 'admin',
+      subscriptionStatus: 'active', // admins don't need a subscription
+    });
+
+    const token = generateToken(adminUser.id, adminUser.email);
+
+    res.status(201).json({
+      success: true,
+      message: 'Institute registered successfully',
+      token,
+      user: {
+        id: adminUser.id,
+        name: adminUser.name,
+        email: adminUser.email,
+        role: adminUser.role,
+        instituteId: institute.id,
+      },
+      institute: {
+        id: institute.id,
+        name: institute.name,
+        referralCode: institute.referralCode,
+      },
+    });
+  } catch (error) {
+    console.error('Institute register error:', error);
+    res.status(500).json({ error: 'Registration failed', message: error.message });
+  }
+});
+
+/**
  * POST /api/auth/signup
  * Register a new user
  */

@@ -91,10 +91,12 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   if (user && !isLoading) {
-    if (referralCode) {
+    if (user.role === 'admin' || user.role === 'super_admin') {
+      router.push('/dashboard/institute');
+    } else if (referralCode) {
       router.push(`/dashboard?ref=${encodeURIComponent(referralCode)}`);
     } else if (institute) {
-      router.push(`/dashboard/institute?ref=${institute.referralCode}`);
+      router.push(`/dashboard/institute`);
     } else {
       router.push('/dashboard/home');
     }
@@ -234,6 +236,18 @@ export default function LoginPage() {
               </p>
             </div>
           )}
+
+          <div className="text-center text-sm text-gray-500 pt-2 border-t">
+            <p>Are you a coaching center?{' '}
+              <button
+                type="button"
+                onClick={() => router.push('/institute/register')}
+                className="text-indigo-600 hover:underline font-medium"
+              >
+                Register your institute →
+              </button>
+            </p>
+          </div>
         </CardContent>
       </Card>
 
