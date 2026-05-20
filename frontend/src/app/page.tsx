@@ -856,7 +856,26 @@ export default function TestPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {step === 'input' && (
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <>
+          {/* Hero Entry Banner */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-6 px-4 mb-6">
+            <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">Welcome to EduTest AI</h2>
+                <p className="text-blue-100">Practice smarter. Score higher.</p>
+              </div>
+              <div className="flex gap-3">
+                <a href="/login" className="px-6 py-2 bg-white text-blue-600 font-semibold rounded hover:bg-blue-50 transition">
+                  Sign In (Student)
+                </a>
+                <a href="/institute/register" className="px-6 py-2 bg-green-600 text-white font-semibold rounded hover:bg-green-700 transition">
+                  Coaching Center Admin
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-4xl mx-auto px-4 py-8">
           <Card className="p-6">
             <CardHeader>
               <CardTitle className="text-2xl text-center">
@@ -913,7 +932,8 @@ export default function TestPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+          </div>
+        </>
       )}
 
       {step === 'review' && (

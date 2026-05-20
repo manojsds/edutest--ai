@@ -34,7 +34,15 @@ export function Header({ onOpenSettings }: { onOpenSettings?: () => void }) {
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <a href="/login" className="text-sm px-3 py-1 border rounded bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600">
+            Sign In
+          </a>
+
+          <a href="/institute/register" className="text-sm px-3 py-1 border rounded bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600">
+            Coaching Center
+          </a>
+
           <select aria-label="language" className="border rounded px-2 py-1 text-sm bg-white dark:bg-gray-800">
             <option>EN</option>
             <option>HI</option>
