@@ -74,7 +74,7 @@ export default function InstituteDashboard() {
   const [showAllStudents, setShowAllStudents] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-2.onrender.com';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com';
 
   const fetchDashboard = async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);

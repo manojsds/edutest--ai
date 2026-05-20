@@ -33,7 +33,7 @@ export default function LoginPage() {
 
       setLoadingBranding(true);
       fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-backend.onrender.com'}/api/auth/institute/${referralCode}`
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com'}/api/auth/institute/${referralCode}`
       )
         .then((res) => res.json())
         .then((data) => {

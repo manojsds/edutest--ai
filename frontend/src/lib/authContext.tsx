@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const API_URL =
-    process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-backend.onrender.com';
+    process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com';
 
   // Initialize session from stored JWT
   useEffect(() => {
@@ -165,6 +165,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async ({ referralCode }: { referralCode?: string } = {}) => {
     try {
       setIsLoading(true);
+
+      if (!auth || !googleProvider) {
+        throw new Error('Firebase authentication is not configured. Set the NEXT_PUBLIC_FIREBASE_* environment variables.');
+      }
 
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();

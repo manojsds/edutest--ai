@@ -69,7 +69,7 @@ export default function PricingPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-2.onrender.com';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com';
 
   // Load Razorpay SDK
   useEffect(() => {

@@ -14,7 +14,7 @@ import referralBrandMap from '@/lib/referralBrandMap.json'
 
 const API_CANDIDATES = [
   // Production: Use your deployed Render backend
-  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-2.onrender.com',
+  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com',
   // Fallback: Try local development servers
   'http://localhost:5001',
   'http://localhost:5000'

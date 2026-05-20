@@ -15,7 +15,7 @@ const EXAM_OPTIONS = [
 
 export default function InstituteRegisterPage() {
   const router = useRouter();
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-2.onrender.com';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com';
 
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [loading, setLoading] = useState(false);

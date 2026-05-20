@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai-backend.onrender.com';
+  process.env.NEXT_PUBLIC_API_URL || 'https://edutest-ai.onrender.com';
 
 export default function BrandingSetupPage() {
   const [referralCode, setReferralCode] = useState('');

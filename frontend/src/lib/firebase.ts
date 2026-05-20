@@ -11,16 +11,29 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const hasValidFirebaseConfig = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.authDomain &&
+  firebaseConfig.projectId &&
+  firebaseConfig.appId &&
+  !String(firebaseConfig.apiKey).includes('your-') &&
+  !String(firebaseConfig.authDomain).includes('your-') &&
+  !String(firebaseConfig.projectId).includes('your-') &&
+  !String(firebaseConfig.appId).includes('your-')
+);
+
+// Initialize Firebase only when the config is real.
+const app = hasValidFirebaseConfig ? initializeApp(firebaseConfig) : null;
 
 // Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+export const auth = app ? getAuth(app) : null;
+export const googleProvider = app ? new GoogleAuthProvider() : null;
 
 // Customize OAuth experience
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
-});
+if (googleProvider) {
+  googleProvider.setCustomParameters({
+    prompt: 'select_account'
+  });
+}
 
 export default app;
